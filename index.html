@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0d1b2a">
+<title>Super Jonesy Bros - a platformer built by voice</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{height:100%;overflow:hidden;background:#0d1b2a;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overscroll-behavior:none}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+  canvas{display:block;width:100%;height:100%;image-rendering:auto;touch-action:none}
+
+  /* ---------- touch controls ---------- */
+  #ctrl{position:fixed;inset:0;pointer-events:none;z-index:20;display:none}
+  #ctrl.on{display:block;opacity:.86}
+  /* Jonesy: "the directional keypad on the left is a little bit big, I can't see the character".
+     168px -> 116px so the player is never underneath it, and the whole layer is translucent. */
+  .pad{position:absolute;bottom:max(10px,env(safe-area-inset-bottom));pointer-events:auto;
+       display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+       width:116px;height:116px;gap:3px}
+  #dpad{left:max(10px,env(safe-area-inset-left))}
+  .pad button{border:none;background:rgba(255,255,255,.13);color:#fff;font-size:18px;
+       border-radius:16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+       border:1px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;
+       transition:background .06s;font-weight:700}
+  .pad button.act{background:rgba(97,212,106,.55);border-color:rgba(97,212,106,.75)}
+  #bL{grid-area:2/1} #bR{grid-area:2/3} #bU{grid-area:1/2} #bD{grid-area:3/2}
+  .btns{position:absolute;right:max(12px,env(safe-area-inset-right));
+        bottom:max(10px,env(safe-area-inset-bottom));pointer-events:auto;display:flex;gap:10px;align-items:flex-end}
+  .btns button{width:64px;height:64px;border-radius:50%;border:1px solid rgba(255,255,255,.25);
+        background:rgba(255,255,255,.15);color:#fff;font-weight:800;font-size:13px;letter-spacing:.4px;
+        backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center}
+  #bB{width:52px;height:52px;font-size:11px;background:rgba(255,255,255,.10)}
+  #bA{background:rgba(97,212,106,.45);border-color:rgba(97,212,106,.7);font-size:14px}
+  .btns button.act{transform:scale(.94);background:rgba(97,212,106,.8)}
+
+  /* ---------- overlays ---------- */
+  .ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      text-align:center;padding:26px;z-index:30;color:#eaf4ff;background:rgba(8,15,26,.90);
+      backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .ov.hide{display:none}
+  .ov h1{font-size:clamp(26px,7vw,44px);letter-spacing:-1px;margin-bottom:8px;font-weight:800;line-height:1.06}
+  .ov h1 span{color:#61D46A}
+  .ov p{max-width:520px;line-height:1.55;opacity:.92;font-size:clamp(13px,3.4vw,15px);margin-bottom:6px}
+  .ov .k{opacity:.65;font-size:12px;margin-top:14px;line-height:1.7}
+  .btn{margin-top:20px;padding:15px 34px;border-radius:999px;border:none;cursor:pointer;font-weight:800;
+       font-size:16px;color:#04150a;background:#61D46A;letter-spacing:.2px}
+  .btn:active{transform:scale(.97)}
+  .cred{margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.13);
+        font-size:12px;opacity:.8;line-height:1.7;max-width:430px}
+  .cred b{color:#61D46A}
+  .pill{display:inline-block;padding:5px 13px;border-radius:999px;background:rgba(97,212,106,.16);
+        border:1px solid rgba(97,212,106,.38);color:#8ef59a;font-size:11px;letter-spacing:.6px;
+        text-transform:uppercase;margin-bottom:16px;font-weight:700}
+  #hud{position:fixed;top:0;left:0;right:0;z-index:15;display:flex;gap:18px;justify-content:center;
+       padding:14px;padding-top:max(14px,env(safe-area-inset-top));color:#fff;font-weight:800;font-size:14px;
+       text-shadow:0 2px 8px rgba(0,0,0,.6);pointer-events:none;letter-spacing:.3px}
+  #hud div{opacity:.95}
+  #toast{position:fixed;left:50%;top:26%;transform:translateX(-50%);z-index:25;color:#61D46A;
+        font-weight:900;font-size:clamp(20px,6vw,34px);text-shadow:0 3px 14px rgba(0,0,0,.7);
+        opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap}
+  #toast.on{opacity:1}
+
+  /* ---------- landscape-only (Jonesy: "it's only for landscape") ---------- */
+  #rotate{position:fixed;inset:0;z-index:60;display:none;flex-direction:column;align-items:center;
+      justify-content:center;text-align:center;padding:30px;background:#0d1b2a;color:#eaf4ff}
+  #rotate .ph{width:74px;height:120px;border:3px solid #61D46A;border-radius:12px;margin-bottom:22px;
+      position:relative;animation:rot 1.8s ease-in-out infinite}
+  #rotate .ph:after{content:'';position:absolute;left:50%;bottom:7px;transform:translateX(-50%);
+      width:22px;height:3px;background:#61D46A;border-radius:2px}
+  @keyframes rot{0%,45%{transform:rotate(0)}70%,100%{transform:rotate(-90deg)}}
+  #rotate h2{font-size:21px;margin-bottom:8px;font-weight:800;letter-spacing:-.3px}
+  #rotate p{opacity:.8;font-size:14px;line-height:1.6;max-width:340px}
+  @media (orientation:portrait) and (max-width:900px){ #rotate{display:flex} }
+
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+
+<div id="hud">
+  <div id="hCoins">● 0</div>
+  <div id="hScore">0</div>
+  <div id="hTime">300</div>
+  <div id="hLife">♥ 3</div>
+</div>
+<div id="toast"></div>
+
+<div id="ctrl">
+  <div class="pad" id="dpad">
+    <button id="bU">▲</button><button id="bL">◀</button><button id="bR">▶</button><button id="bD">▼</button>
+  </div>
+  <div class="btns">
+    <button id="bB">RUN</button>
+    <button id="bA">JUMP</button>
+  </div>
+</div>
+
+<div id="rotate">
+  <div class="ph"></div>
+  <h2>Turn your phone sideways</h2>
+  <p>Super Jonesy Bros is built for landscape. Rotate your device to play.</p>
+</div>
+
+<div class="ov" id="startOv">
+  <div class="pill">Built by voice</div>
+  <h1>SUPER <span>JONESY</span><br>BROS</h1>
+  <p>A one-level platformer. Run, jump, stomp, hit blocks, grab the mushroom and reach the flag.</p>
+  <button class="btn" id="startBtn">PLAY</button>
+  <p class="k">◀ ▶ move &nbsp;·&nbsp; JUMP to jump &nbsp;·&nbsp; hold JUMP to go higher &nbsp;·&nbsp; RUN to sprint<br>Desktop: arrows / A D &nbsp;·&nbsp; Space = jump &nbsp;·&nbsp; Shift = run</p>
+  <div class="cred">
+    <b>Built by voice by Shelby @ agenttrac</b><br>
+    Every asset, line of code and sound in this page was produced from spoken instruction.
+    No typing. No purchased assets. No game engine.
+  </div>
+</div>
+
+<div class="ov hide" id="winOv">
+  <div class="pill">Level complete</div>
+  <h1>NICE <span>WORK</span></h1>
+  <p id="winStats"></p>
+  <button class="btn" id="againBtn">PLAY AGAIN</button>
+  <div class="cred"><b>Built by voice by Shelby @ agenttrac</b></div>
+</div>
+
+<div class="ov hide" id="deadOv">
+  <div class="pill">Game over</div>
+  <h1>SO <span>CLOSE</span></h1>
+  <p id="deadStats"></p>
+  <button class="btn" id="retryBtn">TRY AGAIN</button>
+  <div class="cred"><b>Built by voice by Shelby @ agenttrac</b></div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================================
+   SKYBO          UND  —  single-file 2D platformer
+   Built by voice by Shelby @ agenttrac.  No engine, no external assets.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- canvas */
+const CV = document.getElementById('c');
+const G  = CV.getContext('2d');
+const VW = 480, VH = 270;                       // virtual resolution (16:9)
+let scale = 1, offX = 0, offY = 0;
+
+function resize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  scale = Math.min(w / VW, h / VH);
+  CV.width  = Math.floor(VW * scale * (window.devicePixelRatio || 1));
+  CV.height = Math.floor(VH * scale * (window.devicePixelRatio || 1));
+  CV.style.width = (VW*scale)+'px';
+  CV.style.height= (VH*scale)+'px';
+  offX = 0; offY = (h - VH*scale) / 2;
+  G.setTransform(scale*(window.devicePixelRatio||1),0,0,scale*(window.devicePixelRatio||1),0,0);
+  G.imageSmoothingEnabled = true;
+}
+window.addEventListener('resize', resize);
+
+/* ---------------------------------------------------------------- audio */
+const AU = (() => {
+  let ctx = null, master = null, musicOn = false, musicTimer = null, step = 0;
+  function init(){
+    if (ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ctx = new AC();
+    master = ctx.createGain();
+    master.gain.value = 0.32;
+    master.connect(ctx.destination);
+  }
+  function resume(){ init(); if (ctx && ctx.state === 'suspended') ctx.resume(); }
+  function tone(freq, dur, type, vol, when, slideTo){
+    if (!ctx) return;
+    const t = when || ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(30,slideTo), t + dur);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol == null ? 0.22 : vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  function noise(dur, vol){
+    if (!ctx) return;
+    const n = Math.floor(ctx.sampleRate * dur);
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i=0;i<n;i++) d[i] = (Math.random()*2-1) * (1 - i/n);
+    const s = ctx.createBufferSource(); s.buffer = buf;
+    const g = ctx.createGain(); g.gain.value = vol == null ? 0.16 : vol;
+    s.connect(g); g.connect(master); s.start();
+  }
+  const S = {
+    jump(){ tone(330,0.15,'square',0.20,null,660); },
+    bigJump(){ tone(300,0.20,'square',0.22,null,740); },
+    /* Jonesy: "when Mario jumps into the coin it makes a clink sound". Two bright
+       notes with a short triangle sparkle on top so it reads as metal, not a beep. */
+    coin(){ tone(988,0.05,'square',0.16); tone(1319,0.11,'square',0.17, ctx?ctx.currentTime+0.05:0);
+            tone(2637,0.05,'triangle',0.07, ctx?ctx.currentTime+0.05:0); },
+    stomp(){ tone(340,0.09,'square',0.24,null,70); tone(150,0.06,'sine',0.16,null,55); noise(0.05,0.13); },
+    bump(){ tone(150,0.08,'square',0.20,null,80); },
+    grow(){ [523,659,784,1047].forEach((f,i)=>tone(f,0.11,'triangle',0.20, ctx?ctx.currentTime+i*0.07:0)); },
+    shrink(){ [784,587,440,330].forEach((f,i)=>tone(f,0.10,'square',0.18, ctx?ctx.currentTime+i*0.06:0)); },
+    die(){ [440,392,330,262,196].forEach((f,i)=>tone(f,0.20,'square',0.22, ctx?ctx.currentTime+i*0.13:0)); },
+    win(){ [523,659,784,1047,1319].forEach((f,i)=>tone(f,0.19,'triangle',0.23, ctx?ctx.currentTime+i*0.13:0)); },
+    /* the celebratory chime for the flag reaching the top of the pole */
+    fanfare(){ const t0 = ctx?ctx.currentTime:0;
+      [[523,0.0],[659,0.10],[784,0.20],[1047,0.30],[1319,0.40],[1568,0.55]].forEach(([f,d])=>{
+        tone(f,0.26,'triangle',0.22, t0+d); tone(f*2,0.20,'sine',0.06, t0+d); });
+      tone(2093,0.5,'sine',0.10, t0+0.62); },
+    block(){ tone(120,0.06,'square',0.16); },
+    start(){ resume(); }
+  };
+  /* ---- original chiptune engine -------------------------------------------------
+     PPQ's music endpoint 404s (docs list it, the route does not exist), so this is
+     synthesised properly instead: a 3-voice arrangement with sections, a walking
+     bass, an arpeggio pad and a lead melody. Square/triangle waves = authentic
+     NES-era sound, and it costs nothing and ships no files.                        */
+  const SCALE = { C4:261.63, D4:293.66, E4:329.63, F4:349.23, G4:392.00, A4:440.00, B4:493.88,
+                  C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, A5:880.00, B5:987.77, C6:1046.50,
+                  C3:130.81, D3:146.83, E3:164.81, F3:174.61, G3:196.00, A3:220.00, B3:246.94,
+                  C2:65.41,  G2:98.00,  A2:110.00, F2:87.31 };
+  // 32-step phrase. 0 = rest. Bar 1-2 = A section, 3-4 = B section (lifted).
+  const LEAD = [
+    "E5",0,"G5",0,"A5",0,"G5","E5", "D5",0,"E5",0,"G5",0,0,0,
+    "C5",0,"D5",0,"E5","G5","A5",0, "G5",0,"E5",0,"D5",0,0,0,
+    "F5",0,"E5",0,"D5",0,"C5","D5", "E5",0,"G5",0,"A5",0,"B5",0,
+    "C6",0,"B5","A5","G5",0,"E5","D5", "C5",0,0,0,0,0,0,0,
+  ];
+  const BASSW = [
+    "C3",0,0,"C3",0,0,"G2",0,  "A2",0,0,"A2",0,0,"E3",0,
+    "F3",0,0,"F3",0,0,"C3",0,  "G2",0,0,"G2",0,0,"G2",0,
+    "F3",0,0,"F3",0,0,"C3",0,  "G2",0,0,"G2",0,0,"D3",0,
+    "C3",0,0,"C3",0,0,"G2",0,  "C3",0,0,"G2",0,0,"C3",0,
+  ];
+  const PAD = ["C4","E4","G4","C5","A3","C4","E4","A4","F3","A3","C4","F4","G3","B3","D4","G4"];
+  function stepMusic(){
+    if (!ctx || !musicOn) return;
+    const t = ctx.currentTime;
+    const i = step % LEAD.length;
+    const lead = LEAD[i];
+    if (lead && SCALE[lead]) tone(SCALE[lead], 0.17, 'square', 0.075, t);
+    const bs = BASSW[i];
+    if (bs && SCALE[bs]) tone(SCALE[bs], 0.20, 'triangle', 0.13, t);
+    if (step % 4 === 0){                              // arpeggio pad on the beat
+      const p = PAD[(step/4) % PAD.length];
+      if (SCALE[p]) tone(SCALE[p], 0.30, 'sine', 0.035, t);
+    }
+    if (step % 2 === 0) noise(0.018, 0.020);          // soft hat
+    step++;
+  }
+  function tick(){ stepMusic(); }
+  return {
+    s: S,
+    unlock(){ resume(); },
+    music(on){
+      init(); if (!ctx) return;
+      musicOn = !!on;
+      if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+      if (on){ step = 0; tick(); musicTimer = setInterval(tick, 250); }
+    },
+    stopAll(){ musicOn = false; if (musicTimer){ clearInterval(musicTimer); musicTimer = null; } }
+  };
+})();
+
+/* ---------------------------------------------------------------- input */
+const KEY = { left:false, right:false, jump:false, run:false, down:false };
+let jumpWasDown = false;
+
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (['arrowleft','a'].includes(k)) KEY.left = true;
+  if (['arrowright','d'].includes(k)) KEY.right = true;
+  if (k === 'arrowdown' || k === 's') KEY.down = true;
+  if (k === ' ' || k === 'arrowup' || k === 'w' || k === 'z'){ KEY.jump = true; e.preventDefault(); }
+  if (k === 'shift') KEY.run = true;
+  if (['arrowleft','arrowright','arrowup','arrowdown',' '].includes(k)) e.preventDefault();
+});
+addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (['arrowleft','a'].includes(k)) KEY.left = false;
+  if (['arrowright','d'].includes(k)) KEY.right = false;
+  if (k === 'arrowdown' || k === 's') KEY.down = false;
+  if (k === ' ' || k === 'arrowup' || k === 'w' || k === 'z') KEY.jump = false;
+  if (k === 'shift') KEY.run = false;
+});
+
+function bindHold(el, on, off){
+  const dn = e => { e.preventDefault(); AU.unlock(); on(); };
+  const up = e => { e.preventDefault(); off(); };
+  el.addEventListener('touchstart', dn, {passive:false});
+  el.addEventListener('touchend', up, {passive:false});
+  el.addEventListener('touchcancel', up, {passive:false});
+  el.addEventListener('mousedown', dn);
+  el.addEventListener('mouseup', up);
+  el.addEventListener('mouseleave', up);
+}
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+if (isTouch) document.getElementById('ctrl').classList.add('on');
+
+bindHold(document.getElementById('bL'), ()=>KEY.left=true,  ()=>KEY.left=false);
+bindHold(document.getElementById('bR'), ()=>KEY.right=true, ()=>KEY.right=false);
+bindHold(document.getElementById('bU'), ()=>KEY.jump=true,  ()=>KEY.jump=false);
+bindHold(document.getElementById('bD'), ()=>KEY.down=true,  ()=>KEY.down=false);
+bindHold(document.getElementById('bA'), ()=>KEY.jump=true,  ()=>KEY.jump=false);
+bindHold(document.getElementById('bB'), ()=>KEY.run=true,   ()=>KEY.run=false);
+
+/* visual feedback on the touch buttons */
+function flash(id, on){ const e = document.getElementById(id); if (e) e.classList.toggle('act', on); }
+setInterval(()=>{
+  if (!isTouch) return;
+  flash('bL', KEY.left); flash('bR', KEY.right); flash('bU', KEY.jump);
+  flash('bA', KEY.jump); flash('bB', KEY.run);
+}, 40);
+
+/* ---------------------------------------------------------------- level */
+const T = 16;                                   // tile size in virtual px
+const SOLID   = 1, BRICK = 2, QBLOCK = 3, USED = 4, PIPE = 5, GOAL = 9;
+
+/*  '#' ground   'B' brick   '?' question   'u' used   'P' pipe
+    'c' coin     '|' platform 'F' flag post  '.' empty
+   ALL ROWS MUST BE THE SAME LENGTH. The flag sits ABOVE solid ground. */
+const MAP = [
+"................................................................................................................................................................",
+"................................................................................................................................................................",
+"......................?BB?B.....................................................................................................................................",
+"................................................................................................................................................................",
+"....................c....c.........cB?Bc....................c.c.....BBBB...........................|..................cccccccc..........................F.......",
+".............?.......c....c.c.......c...c.................c.c...........................................................................................F.......",
+"......................c...cc.........c....c...cc....................................ccccBBcc................................BB?BBBB.....................F.......",
+".......................c....c.........c....c............................................BB..........................c.c.....BBBBBBcccc..................F.......",
+"........................c.?..c....c....c..............................c.c...................................................BBBBBB......................F.......",
+".........................###................................................................................................BBBBBB......................F.......",
+"........................#####.....cc.cc.....................................................................................BBBBBB......................F.......",
+"#################################...##########...###################...###################################...##################...#############...##############",
+"#################################...##########...###################...###################################...##################...#############...##############",
+"#################################...##########...###################...###################################...##################...#############...##############",
+"#################################...##########...###################...###################################...##################...#############...##############",
+"#################################...##########...###################...###################################...##################...#############...##############",
+"#################################...##########...###################...###################################...##################...#############...##############"
+];
+
+const COLS = Math.max(...MAP.map(r => r.length));
+const TOTAL_COINS = MAP.join('').split('c').length - 1;   // captured once, before any are taken
+const ROWS = MAP.length;
+
+/* pad every row to COLS so indexing never returns undefined */
+for (let i=0;i<ROWS;i++) if (MAP[i].length < COLS) MAP[i] = MAP[i] + '.'.repeat(COLS - MAP[i].length);
+
+const solidAt = (cx, cy) => {
+  if (cy < 0) return false;                            // headroom above the world
+  if (cx < 0 || cx >= COLS) return true;               // walls at level edges
+  if (cy >= ROWS) return false;
+  const ch = MAP[cy][cx];
+  return ch === '#' || ch === 'B' || ch === '?' || ch === 'u' || ch === 'P';
+};
+const tileAt = (cx, cy) => (cy>=0 && cy<ROWS && cx>=0 && cx<COLS) ? MAP[cy][cx] : '.';
+
+/* ---------------------------------------------------------------- state */
+let P, enemies, items, fx, bumps, cam, timeLeft, score, coins, lives, state, tAcc, flagY;
+let mushGiven = false;        // only ONE mushroom leaves a ? block per life (Mario rule)
+let FLAG = { col: 0, topRow: 0, botRow: 0 };   // filled at reset from the 'F' tiles
+
+function reset(full){
+  /* Jonesy still could not see him behind the keypad, so he starts further forward again. */
+  P = { x: 150, y: 162, w: 12, h: 14, vx: 0, vy: 0, onGround: false, face: 1,
+        big: false, grow: 0, hurt: 0, dead: false, deadT: 0, won: false, winT: 0, anim: 0,
+        coyote: 0, buffer: 0 };
+  mushGiven = false;
+  enemies = [];
+  /* Jonesy: "as I push forward I just die" -- the old first enemy was at x=64, only 30px from
+     the spawn and hidden behind the D-pad. These are the 11 columns verified by analyse_map.py
+     as solid flat ground with 3 tiles of headroom and no pit edge. First one is 12.7 tiles away. */
+  /* Jonesy: "too many little mushrooms in that first bit, you've got to jump frantically".
+     11 -> 6, evenly spread, first one 13 tiles out so there is room to learn the controls. */
+  const en = [[320,164],[832,164],[1264,164],[1584,164],[1936,164],[2192,164]];
+  /* Every enemy gets a HOME and a PATROL RANGE. Without this they walk the whole level:
+     an enemy from x=320 reversed at the step and then walked left forever until it sat on
+     the player's spawn at x=150 -- so dying once meant respawning into it and dying again. */
+  en.forEach(([tx,ty],i)=> enemies.push({ x:tx, y:ty, home:tx, range:38, w:13, h:12,
+      vx:(i%3===1?-0.42:0.42), vy:0, dead:false, deadT:0, anim:0, squash:0 }));
+  items  = [];
+  fx     = [];
+  bumps  = {};
+  cam    = { x: 0 };
+  timeLeft = 300;
+  score  = 0; coins = 0;
+  tAcc   = 0;                       // 🔴 MUST be reset — was left undefined, which made it NaN
+  if (full) lives = 3;
+  state  = 'play';
+  flagY  = 0;
+  /* find the flagpole from the map so it can be drawn ONCE (the old per-tile draw
+     stacked seven flags on top of each other) and raised on a win. */
+  FLAG = { col: 0, topRow: ROWS, botRow: 0 };
+  for (let cy=0; cy<ROWS; cy++) for (let cx=0; cx<COLS; cx++){
+    if (MAP[cy][cx] === 'F'){
+      FLAG.col = cx; FLAG.topRow = Math.min(FLAG.topRow, cy); FLAG.botRow = Math.max(FLAG.botRow, cy);
+    }
+  }
+  P.flagRise = 0;
+}
+reset(true);
+
+/* ---------------------------------------------------------------- art (PPQ-generated) */
+/* All sprites were generated through PPQ at $0.023 each and chroma-keyed from magenta.
+   Every one is ORIGINAL art made from a spoken description -- no borrowed assets.        */
+const IMG = {};
+const ART_LIST = ["chr_idle","chr_run1","chr_run2","chr_jump","chr_big",
+                  "enemy","mushroom","coin","bg"];
+let artReady = 0;
+ART_LIST.forEach(n => {
+  const im = new Image();
+  im.onload = () => { artReady++; };
+  im.onerror = () => { artReady++; };
+  /* 3D art pass (1 Oct): the sprites are now 3D renders. Background ships as jpg. */
+  im.src = "clean3d/" + n + (n === "bg" ? ".jpg" : ".png");
+  IMG[n] = im;
+});
+
+function drawImg(name, cx, by, h, flip, alpha){
+  const im = IMG[name];
+  if (!im || !im.complete || !im.naturalWidth) return false;      // fall back to code art
+  const w = h * (im.naturalWidth / im.naturalHeight);
+  G.save();
+  if (alpha != null) G.globalAlpha *= alpha;
+  if (flip){ G.translate(cx, 0); G.scale(-1,1); G.translate(-cx, 0); }
+  G.drawImage(im, cx - w/2, by - h, w, h);
+  G.restore();
+  return true;
+}
+
+/* ---------------------------------------------------------------- helpers */
+function aabb(a, b){ return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y; }
+function spurt(x, y, n, col, spread){
+  for (let i=0;i<n;i++) fx.push({ x, y, vx:(Math.random()-0.5)*(spread||2.2), vy:-Math.random()*2.2-0.4,
+                                 life:0.55+Math.random()*0.4, t:0, c: col||'#ffffff', r:1+Math.random()*1.6 });
+}
+function addScore(n, x, y){ score += n; if (x!=null) spurt(x, y, 6, '#ffe27a', 1.6); }
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('on');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>el.classList.remove('on'), 900);
+}
+
+/* ---------------------------------------------------------------- physics */
+const COYOTE = 0.11, BUFFER = 0.13;      // ~7 frames of grace each way
+const SPAWN_SAFE = 240;                  // px of the level start nothing may threaten
+const GRAV = 0.42, MAXFALL = 6.2, ACC = 0.32, RUNACC = 0.46,
+      FRIC = 0.24, MAXV = 1.95, MAXRUN = 2.85, JUMPV = -6.35, JUMPHOLD = -0.20;
+
+function moveX(dt){
+  const acc = KEY.run ? RUNACC : ACC;
+  const max = KEY.run ? MAXRUN : MAXV;
+  if (KEY.left  && !KEY.right){ P.vx -= acc; P.face = -1; }
+  else if (KEY.right && !KEY.left){ P.vx += acc; P.face = 1; }
+  else { if (P.vx > 0) P.vx = Math.max(0, P.vx - FRIC); else P.vx = Math.min(0, P.vx + FRIC); }
+  P.vx = Math.max(-max, Math.min(max, P.vx));
+  P.x += P.vx;
+
+  // horizontal tile collision
+  const y0 = Math.floor(P.y / T), y1 = Math.floor((P.y + P.h - 1) / T);
+  if (P.vx > 0){
+    const cx = Math.floor((P.x + P.w) / T);
+    for (let cy=y0; cy<=y1; cy++) if (solidAt(cx, cy)){ P.x = cx*T - P.w - 0.01; P.vx = 0; break; }
+  } else if (P.vx < 0){
+    const cx = Math.floor(P.x / T);
+    for (let cy=y0; cy<=y1; cy++) if (solidAt(cx, cy)){ P.x = (cx+1)*T + 0.01; P.vx = 0; break; }
+  }
+  if (P.x < 0) { P.x = 0; P.vx = 0; }
+}
+
+function moveY(dt){
+  P.vy = Math.min(MAXFALL, P.vy + GRAV);
+  P.y += P.vy;
+  P.onGround = false;
+
+  const x0 = Math.floor(P.x / T), x1 = Math.floor((P.x + P.w - 1) / T);
+  if (P.vy > 0){
+    const cy = Math.floor((P.y + P.h) / T);
+    for (let cx=x0; cx<=x1; cx++) if (solidAt(cx, cy)){ P.y = cy*T - P.h; P.vy = 0; P.onGround = true; break; }
+  } else if (P.vy < 0){
+    const cy = Math.floor(P.y / T);
+    for (let cx=x0; cx<=x1; cx++){
+      if (solidAt(cx, cy)){
+        P.y = (cy+1)*T; P.vy = 0;
+        hitBlock(cx, cy);
+        break;
+      }
+    }
+  }
+}
+
+function hitBlock(cx, cy){
+  const ch = tileAt(cx, cy);
+  const key = cx + ',' + cy;
+  if (ch === '?'){
+    bumps[key] = { t:0, dir:-1 };
+    const row = MAP[cy].split('');
+    row[cx] = 'u'; MAP[cy] = row.join('');
+    /* Jonesy: "too many little mushrooms". The old test re-spawned a mushroom from ANY
+       block whenever one was not currently walking around -- so missing one meant another
+       appeared. Now the level gives ONE mushroom, and every later block is a coin. */
+    if (!P.big && !mushGiven){
+      mushGiven = true;
+      items.push({ type:'mush', x: cx*T+2, y: cy*T, w:12, h:12, vx:0.55, vy:0, emerge:16, dead:false });
+      AU.s.grow();
+    } else {
+      // every other block is a coin
+      coins++; addScore(200, cx*T+8, cy*T);
+      items.push({ type:'pop', x: cx*T+4, y: cy*T-4, w:8, h:8, vy:-2.6, t:0, dead:false });
+      AU.s.coin();
+    }
+  } else if (ch === 'B'){
+    bumps[key] = { t:0, dir:-1 };
+    AU.s.bump();
+    spurt(cx*T+8, cy*T, 4, '#c98a4b', 2.0);
+  } else if (ch === '#' || ch === 'P'){
+    AU.s.block();
+  }
+}
+
+/* ---------------------------------------------------------------- enemies */
+function updateEnemies(dt){
+  enemies.forEach(e => {
+    if (e.squash > 0){ e.squash -= dt; if (e.squash <= 0) e.dead = true; return; }
+    if (e.dead) return;
+
+    e.x += e.vx;
+    const y0 = Math.floor(e.y/T), y1 = Math.floor((e.y+e.h-1)/T);
+    if (e.vx > 0){
+      const cx = Math.floor((e.x+e.w)/T);
+      for (let cy=y0; cy<=y1; cy++) if (solidAt(cx,cy)){ e.x = cx*T-e.w-0.01; e.vx*=-1; break; }
+    } else {
+      const cx = Math.floor(e.x/T);
+      for (let cy=y0; cy<=y1; cy++) if (solidAt(cx,cy)){ e.x = (cx+1)*T+0.01; e.vx*=-1; break; }
+    }
+    // ledge detection — turn around at the edge so they don't fall off the world
+    const aheadX = Math.floor((e.x + (e.vx>0 ? e.w+2 : -2)) / T);
+    const belowY = Math.floor((e.y + e.h + 2) / T);
+    if (!solidAt(aheadX, belowY)) e.vx *= -1;
+
+    // PATROL RANGE — never stray more than `range` px from home. This is what stops an
+    // enemy wandering back to the spawn point and camping on it.
+    if (e.x > e.home + e.range){ e.x = e.home + e.range; e.vx = -Math.abs(e.vx); }
+    if (e.x < e.home - e.range){ e.x = e.home - e.range; e.vx =  Math.abs(e.vx); }
+
+    e.vy = Math.min(MAXFALL, e.vy + GRAV);
+    e.y += e.vy;
+    const x0 = Math.floor(e.x/T), x1 = Math.floor((e.x+e.w-1)/T);
+    if (e.vy > 0){
+      const cy = Math.floor((e.y+e.h)/T);
+      for (let cx=x0; cx<=x1; cx++) if (solidAt(cx,cy)){ e.y = cy*T-e.h; e.vy = 0; break; }
+    }
+    e.anim += 0.16;
+
+    // ---- collide with player
+    if (P.dead || P.won) return;
+    /* SAFE ZONE: nothing may touch the player within SPAWN_SAFE px of the level start,
+       so a respawn can never be an instant second death. */
+    if (e.x < SPAWN_SAFE) return;
+    if (aabb(P, e)){
+      /* Mario-style stomp. The old test needed vy > 0.9 AND the feet within 12px of the
+         enemy top -- most real landings missed that window and killed the player instead.
+         Now: coming down at all, and feet above the enemy's lower half. */
+      const falling = P.vy > 0.35 && (P.y + P.h) <= e.y + e.h * 0.8;
+      if (falling){
+        e.squash = 0.30; e.vx = 0;
+        P.vy = KEY.jump ? -5.6 : -4.3;
+        addScore(100, e.x+6, e.y);
+        spurt(e.x + e.w/2, e.y + 5, 9, '#c4b5fd', 2.4);
+        AU.s.stomp();
+        toast('+100');
+      } else if (P.hurt <= 0){
+        if (P.big){
+          P.big = false; P.h = 14; P.grow = 0.001; P.hurt = 1.6;
+          AU.s.shrink();
+          spurt(P.x+6, P.y+7, 10, '#61D46A', 2.6);
+        } else {
+          killPlayer();
+        }
+      }
+    }
+  });
+  enemies = enemies.filter(e => !e.dead || e.squash > 0);
+}
+
+function killPlayer(){
+  if (P.dead) return;
+  P.dead = true; P.deadT = 0; P.vy = -5.2; P.vx = 0;
+  AU.music(false); AU.s.die();
+}
+
+/* ---------------------------------------------------------------- items */
+function updateItems(dt){
+  items.forEach(it => {
+    if (it.type === 'pop'){
+      it.t += dt; it.vy += 0.34; it.y += it.vy;
+      if (it.t > 0.42) it.dead = true;
+      return;
+    }
+    if (it.type === 'mush'){
+      if (it.emerge > 0){ it.emerge -= 1; it.y -= 1; return; }
+      it.vy = Math.min(MAXFALL, it.vy + GRAV);
+      it.x += it.vx; it.y += it.vy;
+      const y0 = Math.floor(it.y/T), y1 = Math.floor((it.y+it.h-1)/T);
+      if (it.vx > 0){ const cx = Math.floor((it.x+it.w)/T);
+        for (let cy=y0;cy<=y1;cy++) if (solidAt(cx,cy)){ it.x = cx*T-it.w-0.01; it.vx*=-1; break; } }
+      else { const cx = Math.floor(it.x/T);
+        for (let cy=y0;cy<=y1;cy++) if (solidAt(cx,cy)){ it.x = (cx+1)*T+0.01; it.vx*=-1; break; } }
+      const x0 = Math.floor(it.x/T), x1 = Math.floor((it.x+it.w-1)/T);
+      if (it.vy > 0){ const cy = Math.floor((it.y+it.h)/T);
+        for (let cx=x0;cx<=x1;cx++) if (solidAt(cx,cy)){ it.y = cy*T-it.h; it.vy = 0; break; } }
+      if (it.y > VH + 60) it.dead = true;
+
+      if (!P.dead && aabb(P, it)){
+        it.dead = true;
+        P.big = true; P.h = 20; P.grow = 0.5;
+        P.y -= 6;
+        addScore(1000, it.x, it.y);
+        AU.s.grow(); toast('SUPER!');
+      }
+    }
+  });
+  items = items.filter(i => !i.dead);
+}
+
+/* ---------------------------------------------------------------- coins + goal */
+function updateWorld(dt){
+  // coins (collect by overlap with any 'c' tile)
+  const cx0 = Math.floor(P.x/T), cx1 = Math.floor((P.x+P.w)/T);
+  const cy0 = Math.floor(P.y/T), cy1 = Math.floor((P.y+P.h)/T);
+  for (let cy=cy0; cy<=cy1; cy++) for (let cx=cx0; cx<=cx1; cx++){
+    if (tileAt(cx,cy) === 'c'){
+      const row = MAP[cy].split(''); row[cx] = '.'; MAP[cy] = row.join('');
+      coins++; addScore(200, cx*T+8, cy*T+8); AU.s.coin();
+      spurt(cx*T+8, cy*T+8, 7, '#ffe27a', 2.2);
+      if (coins % 10 === 0) toast(coins + ' COINS');
+    }
+    if (tileAt(cx,cy) === 'F'){
+      if (!P.won) winLevel();
+    }
+  }
+}
+
+function winLevel(){
+  P.won = true; P.winT = 0; P.vx = 0; P.flagRise = 0;
+  score += Math.floor(timeLeft) * 10;
+  AU.music(false); AU.s.win();
+  AU.s.fanfare();
+  items.forEach(()=>{});
+}
+
+/* ---------------------------------------------------------------- camera + render */
+function updateCam(dt){
+  const target = P.x + P.w/2 - VW*0.38;
+  cam.x += (target - cam.x) * 0.12;
+  cam.x = Math.max(0, Math.min(COLS*T - VW, cam.x));
+}
+
+function rr(x,y,w,h,r){
+  r = Math.min(r, w/2, h/2);
+  G.beginPath();
+  G.moveTo(x+r,y);
+  G.arcTo(x+w,y,x+w,y+h,r);
+  G.arcTo(x+w,y+h,x,y+h,r);
+  G.arcTo(x,y+h,x,y,r);
+  G.arcTo(x,y,x+w,y,r);
+  G.closePath();
+}
+
+function drawBg(){
+  const bg = IMG.bg;
+  if (bg && bg.complete && bg.naturalWidth){
+    /* The generated backdrop is square, so tiling it repeated the mountains every ~226px and
+       looked obviously stamped. Distant landscape barely moves anyway, so: scale it to cover
+       the view ONCE, offset so its grass line (~78% down) lands exactly on the ground row.
+       No tiling, no visible repeat. */
+    const GROUND_Y = 11 * T;                        // 176
+    const sc = Math.max(VW / bg.naturalWidth, VH / bg.naturalHeight) * 1.02;
+    const w  = bg.naturalWidth  * sc;
+    const h  = bg.naturalHeight * sc;
+    const x  = (VW - w) / 2 - (cam.x / (COLS*T)) * (w - VW) * 0.35;   // gentle drift only
+    const y  = GROUND_Y - 0.78 * h;
+    G.drawImage(bg, x, y, w, h);
+    // haze so the play area stays readable against the art
+    const hz = G.createLinearGradient(0, 0, 0, GROUND_Y);
+    hz.addColorStop(0,   'rgba(205,232,255,0.10)');
+    hz.addColorStop(0.7, 'rgba(225,242,255,0.00)');
+    hz.addColorStop(1,   'rgba(255,255,255,0.12)');
+    G.fillStyle = hz; G.fillRect(0, 0, VW, GROUND_Y);
+    return;
+  }
+  // ---- fallback: the original code-drawn sky (still used until the art loads) ----
+  const g = G.createLinearGradient(0,0,0,VH);
+  g.addColorStop(0,   '#1b3b6f');
+  g.addColorStop(0.45,'#3f79c4');
+  g.addColorStop(0.75,'#8fc4ee');
+  g.addColorStop(1,   '#d9f0ff');
+  G.fillStyle = g; G.fillRect(0,0,VW,VH);
+  // sun
+  G.globalAlpha = 0.85;
+  G.fillStyle = '#fff3c4';
+  G.beginPath(); G.arc(VW-72, 52, 20, 0, Math.PI*2); G.fill();
+  G.globalAlpha = 0.18;
+  G.beginPath(); G.arc(VW-72, 52, 34, 0, Math.PI*2); G.fill();
+  G.globalAlpha = 1;
+
+  // far hills (parallax 0.25)
+  const hx = -cam.x * 0.25;
+  G.fillStyle = '#2f6b8f';
+  for (let i=0;i<14;i++){
+    const bx = hx*0.6 + i*150 - 60;
+    G.beginPath(); G.moveTo(bx, 208);
+    G.quadraticCurveTo(bx+75, 118, bx+150, 208); G.closePath(); G.fill();
+  }
+  // near hills (parallax 0.45) — rounded, modern
+  const nx = -cam.x * 0.45;
+  G.fillStyle = '#3d8a56';
+  for (let i=0;i<16;i++){
+    const bx = nx + i*118 - 40;
+    G.beginPath(); G.moveTo(bx, 214);
+    G.quadraticCurveTo(bx+59, 140, bx+118, 214); G.closePath(); G.fill();
+  }
+  // clouds (parallax 0.15)
+  const clx = -cam.x * 0.15;
+  G.fillStyle = 'rgba(255,255,255,0.88)';
+  const clouds = [[40,44,1],[190,30,0.8],[360,58,1.15],[540,36,0.9],[700,50,1.05],[880,34,0.85]];
+  clouds.forEach(([x,y,s])=>{
+    const px = ((x + clx) % (COLS*T*0.2)) - 60;
+    const p  = px < -140 ? px + (COLS*T*0.2) : px;
+    [0,16,30,44].forEach((o,i)=>{
+      G.beginPath();
+      G.arc(p+o*s, y + (i%2? -3:0), (13 + (i===1||i===2?5:0))*s, 0, Math.PI*2);
+      G.fill();
+    });
+  });
+}
+
+function drawTiles(){
+  const c0 = Math.floor(cam.x / T) - 1, c1 = c0 + Math.ceil(VW/T) + 2;
+  for (let cy=0; cy<ROWS; cy++){
+    for (let cx=Math.max(0,c0); cx<Math.min(COLS,c1); cx++){
+      const ch = MAP[cy][cx];
+      if (ch === '.') continue;
+      const bx = cx*T - cam.x, by = cy*T;
+      const bump = bumps[cx+','+cy];
+      let oy = 0;
+      if (bump){ bump.t += 0.06; oy = Math.sin(Math.min(bump.t,1)*Math.PI) * -6; if (bump.t >= 1) delete bumps[cx+','+cy]; }
+      const y = by + oy;
+
+      if (ch === '#'){
+        /* Grass on top, earth below. Repeating bright tiles across six rows read as a wall;
+           this gives the ground a surface and a body like the generated backdrop. */
+        const openAbove = !solidAt(cx, cy - 1);
+        if (openAbove){
+          G.fillStyle = '#3f7d2f'; rr(bx, y, T, T, 4); G.fill();          // grass skirt
+          G.fillStyle = '#5fbb4a';
+          G.beginPath(); G.moveTo(bx, y + 7);
+          for (let k=0;k<=4;k++){
+            const px = bx + (T/4)*k;
+            G.quadraticCurveTo(px + T/8, y + 1, px + T/4, y + 7);
+          }
+          G.lineTo(bx + T, y + T); G.lineTo(bx, y + T); G.closePath(); G.fill();
+          G.fillStyle = 'rgba(255,255,255,.16)';
+          G.beginPath(); G.ellipse(bx + T*0.35, y + 5, 3, 1.4, 0, 0, Math.PI*2); G.fill();
+        } else {
+          G.fillStyle = '#6b4a2c'; rr(bx, y, T, T, 2); G.fill();          // earth body
+          G.fillStyle = 'rgba(0,0,0,.10)';
+          G.fillRect(bx, y + T - 2, T, 2);
+          // a couple of pebbles, deterministic per tile so they do not shimmer
+          const sd = (cx * 7 + cy * 13) % 5;
+          if (sd === 1) { G.fillStyle = 'rgba(255,255,255,.10)'; G.beginPath(); G.arc(bx+5, y+6, 2, 0, Math.PI*2); G.fill(); }
+          if (sd === 3) { G.fillStyle = 'rgba(0,0,0,.10)'; G.beginPath(); G.arc(bx+10, y+11, 2.4, 0, Math.PI*2); G.fill(); }
+        }
+      } else if (ch === 'B'){
+        G.fillStyle = '#b4653a'; rr(bx, y, T, T, 3); G.fill();
+        G.fillStyle = 'rgba(255,255,255,.16)'; G.fillRect(bx+2, y+2, T-4, 2);
+        G.strokeStyle = 'rgba(0,0,0,.22)'; G.lineWidth = 1;
+        G.beginPath(); G.moveTo(bx, y+T/2); G.lineTo(bx+T, y+T/2);
+        G.moveTo(bx+T/2, y); G.lineTo(bx+T/2, y+T/2);
+        G.moveTo(bx+T*0.25, y+T/2); G.lineTo(bx+T*0.25, y+T);
+        G.moveTo(bx+T*0.75, y+T/2); G.lineTo(bx+T*0.75, y+T); G.stroke();
+      } else if (ch === '?'){
+        const pulse = 0.5 + 0.5*Math.sin(perf*4 + cx);
+        G.fillStyle = '#e0a800'; rr(bx, y, T, T, 4); G.fill();
+        G.fillStyle = `rgba(255,255,255,${0.20 + pulse*0.22})`; rr(bx+2, y+2, T-4, T-4, 3); G.fill();
+        G.fillStyle = '#7a5200'; G.font = 'bold 11px sans-serif'; G.textAlign = 'center';
+        G.fillText('?', bx+T/2, y+T-4);
+        G.textAlign = 'left';
+      } else if (ch === 'u'){
+        G.fillStyle = '#9a7a3a'; rr(bx, y, T, T, 3); G.fill();
+        G.fillStyle = 'rgba(0,0,0,.18)'; G.fillRect(bx+1, y+1, T-2, 3);
+      } else if (ch === 'P'){
+        G.fillStyle = '#2f9e44'; rr(bx, y, T, T, 3); G.fill();
+        G.fillStyle = 'rgba(255,255,255,.22)'; G.fillRect(bx+2, y+2, 3, T-4);
+      } else if (ch === 'c'){
+        const sp = 1 + Math.sin(perf*6 + cx*0.8)*0.13;
+        const bobY = Math.sin(perf*3 + cx*0.5)*1.4;
+        const drawn = drawImg("coin", bx + T/2, y + T + bobY, 13, false);
+        if (!drawn){
+          G.save(); G.translate(bx+T/2, y+T/2); G.scale(sp,1);
+          G.fillStyle = '#ffd23f'; G.beginPath(); G.arc(0,0,T*0.30,0,Math.PI*2); G.fill();
+          G.fillStyle = '#ffb703'; G.beginPath(); G.arc(0,0,T*0.19,0,Math.PI*2); G.fill();
+          G.restore();
+        }
+      } else if (ch === '|'){
+        G.fillStyle = '#7a5230'; rr(bx, y+2, T, 6, 3); G.fill();
+      } else if (ch === 'F'){
+        // the flagpole is drawn once by drawFlag() -- nothing per tile
+      }
+    }
+  }
+}
+
+function drawFlag(){
+  if (!FLAG.col) return;
+  const px = FLAG.col*T + T/2 - cam.x;
+  if (px < -60 || px > VW + 60) return;
+  const topY = FLAG.topRow*T - 26;                 // a little above the topmost F tile
+  const botY = (FLAG.botRow + 1)*T;                // sits on the ground
+  const poleH = botY - topY;
+
+  // pole + ball on top
+  const grd = G.createLinearGradient(px-2, 0, px+2, 0);
+  grd.addColorStop(0,'#8fa3b6'); grd.addColorStop(.5,'#e8f1f8'); grd.addColorStop(1,'#8fa3b6');
+  G.fillStyle = grd; G.fillRect(px-1.5, topY, 3, poleH);
+  G.fillStyle = '#ffd23f';
+  G.beginPath(); G.arc(px, topY-2, 4, 0, Math.PI*2); G.fill();
+
+  // the flag itself: rises bottom -> top on a win
+  const rise = P.flagRise || 0;                    // 0 = bottom of pole, 1 = top
+  const fy = topY + 10 + (1 - rise) * (poleH - 42);
+  const wave = P.won ? Math.sin(perf*9)*2.6 : Math.sin(perf*2.2)*1.1;
+  G.fillStyle = '#61D46A';
+  G.beginPath();
+  G.moveTo(px+1.5, fy);
+  G.quadraticCurveTo(px+20, fy+5+wave, px+34, fy+2+wave);
+  G.lineTo(px+34, fy+14+wave);
+  G.quadraticCurveTo(px+20, fy+17+wave, px+1.5, fy+22);
+  G.closePath(); G.fill();
+  G.fillStyle = 'rgba(255,255,255,.35)';
+  G.fillRect(px+1.5, fy+9, 14, 3);
+}
+
+function drawPlayer(){
+  const x = P.x - cam.x, cx = x + P.w/2, by = P.y + P.h;
+
+  // shadow first (under the sprite)
+  G.fillStyle = 'rgba(0,0,0,.18)';
+  G.beginPath(); G.ellipse(cx, by+2, 7, 2.6, 0, 0, Math.PI*2); G.fill();
+
+  G.save();
+  if (P.hurt > 0 && Math.floor(perf*22) % 2 === 0) G.globalAlpha = 0.45;
+  if (P.dead){ G.translate(cx, by); G.rotate(P.deadT*7); G.translate(-cx, -by); }
+
+  // ---- PPQ sprite ----
+  let name = P.big ? "chr_big" : "chr_idle";
+  if (!P.big){
+    if (!P.onGround) name = "chr_jump";
+    else if (Math.abs(P.vx) > 0.15) name = (Math.floor(P.anim) % 2 === 0) ? "chr_run1" : "chr_run2";
+  } else if (!P.onGround){
+    name = "chr_big";                                  // big has no separate jump art
+  }
+  const h = P.big ? 40 : 27;
+  const grown = P.grow > 0 ? (1 + Math.sin((0.5-P.grow)*Math.PI*2)*0.18) : 1;
+  const ok = drawImg(name, cx, by + 1, h * grown, P.face < 0);
+  if (!ok){
+    // fallback: keep something on screen if the art has not loaded
+    G.fillStyle = P.big ? '#ff7a45' : '#61D46A';
+    rr(cx - P.w/2, P.y, P.w, P.h, 4); G.fill();
+  }
+  G.restore();
+
+  // growing sparkle
+  if (P.grow > 0){
+    for (let i=0;i<5;i++){
+      const a = P.grow*10 + i*1.3;
+      G.globalAlpha = P.grow; G.fillStyle = '#fff59d';
+      G.beginPath(); G.arc(cx + Math.cos(a)*12, by - 14 + Math.sin(a)*9, 1.8, 0, Math.PI*2); G.fill();
+    }
+    G.globalAlpha = 1;
+  }
+}
+
+function drawEnemies(){
+  enemies.forEach(e => {
+    const x = e.x - cam.x, y = e.y;
+    if (x < -40 || x > VW + 40) return;
+    const squashing = e.squash > 0;
+    const cx = x + e.w/2, by = y + e.h;
+    /* 0 -> 1 across the 0.30s squash: the enemy flattens AND fades, so it visibly
+       "bloops" and disappears instead of just vanishing. */
+    const sq = squashing ? Math.min(1, (0.30 - e.squash) / 0.30) : 0;
+
+    G.fillStyle = 'rgba(0,0,0,.16)';
+    G.beginPath(); G.ellipse(cx, by+1.5, 7 + sq*4, Math.max(1, 2 - sq), 0, 0, Math.PI*2); G.fill();
+
+    const h = squashing ? 15 - sq*11 : 15;
+    const bob = squashing ? 0 : Math.sin(e.anim)*0.8;
+    const newAlpha = squashing ? 1 - sq : 1;
+    const ok = drawImg("enemy", cx, by + 1 + bob, h, e.vx < 0, newAlpha);
+    if (!ok){
+      G.fillStyle = '#8b5cf6';
+      G.beginPath(); G.ellipse(cx, by - h/2, e.w*0.56, h*0.5, 0, 0, Math.PI*2); G.fill();
+    }
+  });
+}
+
+function drawItems(){
+  items.forEach(it => {
+    const x = it.x - cam.x, y = it.y;
+    if (it.type === 'pop'){
+      G.fillStyle = '#ffd23f';
+      G.beginPath(); G.arc(x+4, y+4, 3.4, 0, Math.PI*2); G.fill();
+      return;
+    }
+    // --- mushroom: PPQ sprite ---
+    G.fillStyle = 'rgba(0,0,0,.15)';
+    G.beginPath(); G.ellipse(x+it.w/2, it.y+it.h+1.5, 6, 2, 0, 0, Math.PI*2); G.fill();
+    const ok = drawImg("mushroom", x + it.w/2, it.y + it.h + 1, 15, false);
+    if (!ok){
+      G.fillStyle = '#e63946';
+      G.beginPath(); G.ellipse(x+it.w/2, y+it.h*0.5, 6, 6.5, 0, Math.PI, Math.PI*2); G.fill();
+      G.fillStyle = '#f5f0e6'; G.fillRect(x+it.w*0.3, y+it.h*0.5, it.w*0.4, it.h*0.5);
+    }
+  });
+}
+
+function drawFx(){
+  fx.forEach(p => {
+    G.globalAlpha = Math.max(0, 1 - p.t/p.life);
+    G.fillStyle = p.c;
+    G.beginPath(); G.arc(p.x - cam.x, p.y, p.r, 0, Math.PI*2); G.fill();
+  });
+  G.globalAlpha = 1;
+}
+
+/* ---------------------------------------------------------------- loop */
+let last = 0, perf = 0;
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (now - last) / 1000) || 0.016;
+  last = now;
+  perf += dt;
+  tAcc += dt;
+
+  /* ---- update ---- */
+  if (state === 'play' && !P.dead && !P.won){
+    if (P.hurt > 0) P.hurt -= dt;
+    if (P.grow > 0) P.grow -= dt;
+    /* COYOTE TIME + JUMP BUFFERING -- the two things that make a touch platformer feel
+       fair rather than cheap. Coyote: you may still jump for a few frames after running
+       off an edge. Buffer: a jump pressed just before you land still fires on landing.
+       Without these, Jonesy was dying on jumps that looked like they should have worked. */
+    const jd = KEY.jump;
+    if (P.onGround) P.coyote = COYOTE; else if (P.coyote > 0) P.coyote -= dt;
+    if (jd && !jumpWasDown) P.buffer = BUFFER; else if (P.buffer > 0) P.buffer -= dt;
+    if (P.buffer > 0 && P.coyote > 0){
+      P.vy = JUMPV; P.onGround = false; P.coyote = 0; P.buffer = 0;
+      P.big ? AU.s.bigJump() : AU.s.jump();
+    }
+    if (jd && P.vy < 0 && !P.onGround) P.vy += JUMPHOLD;          // hold to jump higher
+    jumpWasDown = jd;
+
+    moveX(dt); moveY(dt);
+    P.anim += Math.abs(P.vx) * 0.30;
+
+    /* 🔴 PIT DEATH. Jonesy: "if you fall down one of the holes you don't die so you don't
+       restart the level, you run almost underground where you can't see and then the game's
+       unplayable." He was right -- killPlayer was ONLY reachable from an enemy or the timer,
+       so a fall into a pit meant falling forever below the camera while the game carried on
+       with an invisible player. Now any fall past the bottom of the world ends the life. */
+    if (P.y > ROWS*T + 40) killPlayer();
+
+    if (tAcc > 0.25){ tAcc = 0; timeLeft = Math.max(0, timeLeft - 1); if (timeLeft === 0) killPlayer(); }
+
+    updateEnemies(dt); updateItems(dt); updateWorld(dt); updateCam(dt);
+  } else if (P.dead){
+    P.deadT += dt;
+    P.vy = Math.min(MAXFALL, P.vy + GRAV*0.6);
+    P.y += P.vy;
+    updateCam(dt);
+    if (P.deadT > 1.7){
+      if (lives > 1){ lives--; reset(false); AU.music(true); }
+      else { lives = 0; state = 'over'; showOver(); }
+    }
+  } else if (P.won){
+    P.winT += dt;
+    /* Jonesy: "when you run into the flag the flag goes from the bottom to the top of the
+       pole". 0 -> 1 over 0.9s, alongside the player's own rise. */
+    P.flagRise = Math.min(1, P.flagRise + dt/1.15);   // ~1.15s up the pole
+    if (P.winT < 0.9){ P.y -= 0.6; }
+    updateCam(dt);
+    /* Jonesy wants to see the flag run up the pole -- the overlay used to appear at 1.0s,
+       almost the instant the rise finished. Held back to 2.7s so it is the pay-off. */
+    if (P.winT > 2.7 && !showOver._done){ showOver._done = true; showWin(); }
+  }
+
+  fx.forEach(p => { p.t += dt; p.x += p.vx; p.y += p.vy; p.vy += 0.10; });
+  fx = fx.filter(p => p.t < p.life);
+
+  /* ---- render ---- */
+  drawBg();
+  G.save();
+  G.translate(0, 0);
+  drawTiles();
+  drawItems();
+  drawFlag();
+  drawEnemies();
+  if (!P.won || P.winT < 1.0) drawPlayer();
+  drawFx();
+  G.restore();
+
+  /* vignette */
+  const vg = G.createRadialGradient(VW/2,VH/2,VH*0.35, VW/2,VH/2,VH*0.85);
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,.28)');
+  G.fillStyle = vg; G.fillRect(0,0,VW,VH);
+
+  hud();
+}
+
+function hud(){
+  document.getElementById('hCoins').textContent = '● ' + coins;
+  document.getElementById('hScore').textContent = String(score);
+  document.getElementById('hTime').textContent  = String(Math.ceil(timeLeft));
+  document.getElementById('hLife').textContent  = '♥ ' + lives;
+}
+
+/* ---------------------------------------------------------------- overlays */
+function showWin(){
+  document.getElementById('winStats').textContent =
+    `Coins: ${coins}/${TOTAL_COINS} · Score: ${score} · Time left: ${Math.ceil(timeLeft)}s`;
+  document.getElementById('winOv').classList.remove('hide');
+  document.getElementById('ctrl').classList.remove('on');
+}
+function showOver(){
+  document.getElementById('deadStats').textContent = `Score: ${score} · Coins: ${coins}`;
+  document.getElementById('deadOv').classList.remove('hide');
+  document.getElementById('ctrl').classList.remove('on');
+}
+function startGame(){
+  document.getElementById('startOv').classList.add('hide');
+  document.getElementById('winOv').classList.add('hide');
+  document.getElementById('deadOv').classList.add('hide');
+  showOver._done = false;
+  AU.unlock(); AU.music(true);
+  if (isTouch) document.getElementById('ctrl').classList.add('on');
+  reset(true);
+}
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('againBtn').addEventListener('click', startGame);
+document.getElementById('retryBtn').addEventListener('click', startGame);
+addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !document.getElementById('startOv').classList.contains('hide')) startGame();
+});
+
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
